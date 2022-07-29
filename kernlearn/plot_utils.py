@@ -8,24 +8,28 @@ from scipy.spatial import KDTree
 plt.style.use("classic")
 plt.rcParams.update(
     {
-        "figure.figsize": [5.6, 4.2],  # Width, height in inches
+        "figure.figsize": [5.6, 2.8],  # Width, height in inches
+        "figure.constrained_layout.use": True,
         "text.usetex": True,
         "font.family": "serif",
         "font.serif": ["Computer Modern Roman"],
+        "axes.titlesize": 10,
+        "font.size": 10,
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
+        "image.cmap": "jet",
     }
 )
 
 
-def loss_plot(path, train_losses, test_losses=None):
+def loss_plot(path, train_loss, test_loss=None):
     fig, ax = plt.subplots()
-    epochs = list(range(len(train_losses)))
-    ax.semilogy(epochs, train_losses, "-k", label="Train")
-    if test_losses is not None:
-        assert len(train_losses) == len(test_losses)
-        ax.semilogy(epochs, test_losses, "--k", label="Test")
+    epochs = list(range(len(train_loss)))
+    ax.semilogy(epochs, train_loss, "-k", label="Train")
+    if test_loss is not None:
+        assert len(train_loss) == len(test_loss)
+        ax.semilogy(epochs, test_loss, "--k", label="Test")
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
@@ -33,14 +37,38 @@ def loss_plot(path, train_losses, test_losses=None):
     fig.savefig(os.path.join(path, "loss.pdf"))
 
 
-def trajectory_plot(path, x, v, alpha=1):
+def loss_comparison_plot(ax, loss_dict):
+    for key in loss_dict:
+        loss, error = loss_dict[key]
+        epochs = list(range(len(loss)))
+        if error is not None:
+            ax.semilogy(epochs, loss, "-b", label=key)
+            ax.fill_between(
+                epochs,
+                loss - error,
+                loss + error,
+                color="b",
+                linewidth=0,
+                alpha=0.2,
+            )
+        else:
+            ax.semilogy(epochs, loss, "-g", label=key)
+    ax.set_xlim((epochs[0], epochs[-1]))
+    ax.xaxis.get_major_locator().set_params(integer=True)
+    ax.set_xlabel("Epochs")
+    ax.set_ylabel("Test Loss")
+    # ax.legend(frameon=False)
+
+
+def trajectory_plot(ax, x, v, colour="k", alpha=1):
     x = np.asarray(x)
     v = np.asarray(v)
     vn = v / np.linalg.norm(v, axis=-1)[..., None]  # Normalize
-    fig, ax = plt.subplots(figsize=(5.6, 5.6))
-    ax.axis("equal")
+    ax.set_aspect("equal", adjustable="box")
     ax.set(xlim=[0, 1], ylim=[0, 1])
-    ax.plot(x[..., 0], x[..., 1], "-k", linewidth=0.75, alpha=alpha)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.plot(x[..., 0], x[..., 1], color=colour, linewidth=0.75, alpha=alpha)
     ax.quiver(
         x[-1, :, 0],
         x[-1, :, 1],
@@ -51,13 +79,15 @@ def trajectory_plot(path, x, v, alpha=1):
         scale=30,
         headaxislength=5,
         pivot="mid",
+        color=colour,
     )
-    ax.set_xlabel(r"$x$")
-    ax.set_ylabel(r"$y$")
-    fig.savefig(os.path.join(path, "trajectory.pdf"))
+    # ax.set_xlabel(r"$x$")
+    # ax.set_ylabel(r"$y$")
 
 
-def trajectory_comparison_plot(path, x0, v0, x1, v1, alpha=1):
+def trajectory_comparison_plot(
+    path, x0, v0, x1, v1, fname="trajectory_comparison.pdf", alpha=1
+):
     x0 = np.asarray(x0)
     x1 = np.asarray(x1)
     v0 = np.asarray(v0)
@@ -102,7 +132,7 @@ def trajectory_comparison_plot(path, x0, v0, x1, v1, alpha=1):
     ax[1].set_xticks([])
     ax[1].set_yticks([])
     fig.tight_layout()
-    fig.savefig(os.path.join(path, "trajectory_comparison.pdf"))
+    fig.savefig(os.path.join(path, fname))
 
 
 def predator_prey_plot(path, x_pred, x_prey):
@@ -115,12 +145,32 @@ def predator_prey_plot(path, x_pred, x_prey):
     fig.savefig(os.path.join(path, "predator_prey.pdf"))
 
 
-def phi_plot(path, r, ik):
+def phi_plot(path, r, phi):
     fig, ax = plt.subplots()
-    ax.plot(r, ik, "-k")
+    ax.plot(r, phi, "-k")
     ax.set_xlabel(r"$r$")
     ax.set_ylabel(r"$\phi(r)$")
     fig.savefig(os.path.join(path, "phi.pdf"))
+
+
+def phi_comparison_plot(ax, r, phi_dict):
+    for key in phi_dict:
+        phi, error = phi_dict[key]
+        if error is not None:
+            ax.plot(r, phi, "-b", label=key)
+            ax.fill_between(
+                r,
+                phi - error,
+                phi + error,
+                color="b",
+                linewidth=0,
+                alpha=0.2,
+            )
+        else:
+            ax.plot(r, phi, "-g", label=key)
+    ax.set_xlabel(r"$r$")
+    ax.set_ylabel(r"$\phi(r)$")
+    # ax.legend(frameon=False)
 
 
 def elbow_plot(path, k_values, final_loss):

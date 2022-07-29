@@ -18,5 +18,5 @@ def test_pdist():
     d = 2
     x = random.uniform(rng, (N, d))
     scipy_pdist = squareform(pdist(np.asarray(x)))
-    utils_pdist = utils.pdist(x, x)
+    utils_pdist = utils.pdist(utils.pdisp(x, x))
     assert jnp.allclose(scipy_pdist, utils_pdist)

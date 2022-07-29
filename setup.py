@@ -9,6 +9,14 @@ setup(
     author_email="christian.hines20@imperial.ac.uk",
     license="MIT",
     packages=["kernlearn"],
-    install_requires=["jax", "jaxlib"],
+    install_requires=[
+        "jax",
+        "jaxlib",
+        "optax",
+        "dm-haiku",
+        "matplotlib",
+        "numpy",
+        "tqdm",
+    ],
     zip_safe=False,
 )

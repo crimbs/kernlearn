@@ -1,6 +1,6 @@
 import os
 import json
-from kernlearn.learning import main
+from kernlearn.kern_learn import second_order_system
 from kernlearn.plot_utils import elbow_plot
 
 hparams = {
@@ -17,6 +17,6 @@ k_values = list(range(1, N))
 fin_loss = list()
 for k in k_values:
     hparams["k"] = k
-    fin_loss.append(main(data, hparams, plot=False))
+    fin_loss.append(second_order_system(data, hparams, plot=False))
 dir = os.path.join("figures", "fish-csfric-nn")
 elbow_plot(dir, k_values, fin_loss)

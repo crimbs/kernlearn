@@ -1,10 +1,10 @@
-# kernlearn 🐑🐑🐑 🐕
+# 🐑🐑🐑 🐕 kernlearn
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ## Learn interaction kernels that govern collective behaviour
 
-Repository to accompany the thesis _Understanding Collective Behvaiour Through Machine Learning_.
+Repository to accompany the thesis: _Understanding Collective Behvaiour Through Machine Learning_.
 
 ## Installation
 
