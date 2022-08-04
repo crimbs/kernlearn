@@ -478,6 +478,3 @@ class SecondOrderPredatorPreyNN3:
         Fb = self.phi_b(rxu, params) * xu.squeeze()
         Fc = jnp.mean(self.phi_c(rxu, params)[..., None] * xu, axis=0)
         return jnp.vstack((Fa + Fb, Fc))
-
-
-# class SecondOrderSheep:

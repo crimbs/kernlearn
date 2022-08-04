@@ -8,7 +8,7 @@ from jax import lax
 def chebval(x, c, tensor=True):
     """
     Evaluate a Chebyshev series at points x.
- 
+
     Parameters
     ----------
     x : If `x` is a list or tuple, it is converted to an ndarray, otherwise
