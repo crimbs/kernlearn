@@ -3,7 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import networkx as nx
-from scipy.spatial import KDTree
+
+from kernlearn.utils import pdist, nearest_neighbours
 
 plt.style.use("classic")
 plt.rcParams.update(
@@ -15,6 +16,7 @@ plt.rcParams.update(
         "font.serif": ["Computer Modern Roman"],
         "axes.titlesize": 10,
         "font.size": 10,
+        "legend.fontsize": 8,
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
@@ -23,44 +25,49 @@ plt.rcParams.update(
 )
 
 
-def loss_plot(path, train_loss, test_loss=None):
-    fig, ax = plt.subplots()
+def loss_plot(
+    ax,
+    train_loss,
+    test_loss=None,
+    train_label="Train",
+    test_label="Test",
+    color="black",
+):
     epochs = list(range(len(train_loss)))
-    ax.semilogy(epochs, train_loss, "-k", label="Train")
+    ax.semilogy(epochs, train_loss, color=color, label=train_label)
     if test_loss is not None:
-        assert len(train_loss) == len(test_loss)
-        ax.semilogy(epochs, test_loss, "--k", label="Test")
+        ax.semilogy(
+            epochs, test_loss, color=color, linestyle="dashed", label=test_label
+        )
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
     ax.legend(frameon=False)
-    fig.savefig(os.path.join(path, "loss.pdf"))
 
 
-def loss_comparison_plot(ax, loss_dict):
+def loss_comparison_plot(ax, loss_dict, linestyle="solid"):
     for key in loss_dict:
         loss, error = loss_dict[key]
         epochs = list(range(len(loss)))
         if error is not None:
-            ax.semilogy(epochs, loss, "-b", label=key)
+            ax.semilogy(epochs, loss, linestyle=linestyle, label=key)
             ax.fill_between(
                 epochs,
                 loss - error,
                 loss + error,
-                color="b",
                 linewidth=0,
                 alpha=0.2,
             )
         else:
-            ax.semilogy(epochs, loss, "-g", label=key)
+            ax.semilogy(epochs, loss, linestyle=linestyle, label=key)
     ax.set_xlim((epochs[0], epochs[-1]))
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel("Epochs")
-    ax.set_ylabel("Test Loss")
-    # ax.legend(frameon=False)
+    ax.set_ylabel("Loss")
+    ax.legend(frameon=False)
 
 
-def trajectory_plot(ax, x, v, colour="k", alpha=1):
+def trajectory_plot(ax, x, v, color="black", alpha=1):
     x = np.asarray(x)
     v = np.asarray(v)
     vn = v / np.linalg.norm(v, axis=-1)[..., None]  # Normalize
@@ -68,7 +75,7 @@ def trajectory_plot(ax, x, v, colour="k", alpha=1):
     ax.set(xlim=[0, 1], ylim=[0, 1])
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.plot(x[..., 0], x[..., 1], color=colour, linewidth=0.75, alpha=alpha)
+    ax.plot(x[..., 0], x[..., 1], color=color, linewidth=0.75, alpha=alpha)
     ax.quiver(
         x[-1, :, 0],
         x[-1, :, 1],
@@ -79,10 +86,8 @@ def trajectory_plot(ax, x, v, colour="k", alpha=1):
         scale=30,
         headaxislength=5,
         pivot="mid",
-        color=colour,
+        color=color,
     )
-    # ax.set_xlabel(r"$x$")
-    # ax.set_ylabel(r"$y$")
 
 
 def trajectory_comparison_plot(
@@ -145,41 +150,37 @@ def predator_prey_plot(path, x_pred, x_prey):
     fig.savefig(os.path.join(path, "predator_prey.pdf"))
 
 
-def phi_plot(path, r, phi):
-    fig, ax = plt.subplots()
-    ax.plot(r, phi, "-k")
+def phi_plot(ax, r, phi, error=0, color="black"):
+    ax.plot(r, phi, color=color)
+    ax.fill_between(r, phi - error, phi + error, color=color, alpha=0.2)
     ax.set_xlabel(r"$r$")
     ax.set_ylabel(r"$\phi(r)$")
-    fig.savefig(os.path.join(path, "phi.pdf"))
 
 
 def phi_comparison_plot(ax, r, phi_dict):
     for key in phi_dict:
         phi, error = phi_dict[key]
         if error is not None:
-            ax.plot(r, phi, "-b", label=key)
+            ax.plot(r, phi, label=key)
             ax.fill_between(
                 r,
                 phi - error,
                 phi + error,
-                color="b",
                 linewidth=0,
                 alpha=0.2,
             )
         else:
-            ax.plot(r, phi, "-g", label=key)
+            ax.plot(r, phi, label=key)
     ax.set_xlabel(r"$r$")
     ax.set_ylabel(r"$\phi(r)$")
-    # ax.legend(frameon=False)
+    ax.legend(frameon=False)
 
 
-def elbow_plot(path, k_values, final_loss):
-    fig, ax = plt.subplots()
+def elbow_plot(ax, k_values, final_loss):
     ax.plot(k_values, final_loss, "o-k")
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel(r"$k$")
     ax.set_ylabel("Loss")
-    fig.savefig(os.path.join(path, "elbow.pdf"))
 
 
 def animate_trajectory(path, x, v, t):
@@ -222,7 +223,8 @@ def knn_animate(path, data, k):
 
     def animate(i):
         ax.clear()
-        _, ind = KDTree(x[i]).query(x[i], k)
+        distance = pdist(x, x)
+        _, ind = nearest_neighbours(distance, k)
         # Adjacency representation of graph as a dictionary of lists
         N = x[i].shape[0]
         keys = list(range(N))
