@@ -1,30 +1,38 @@
-import haiku as hk
+from functools import partialmethod
+
 import jax
 import jax.numpy as jnp
-from jax import config
+from jax import random
+import haiku as hk
 
-config.update("jax_enable_x64", True)
-
-from kernlearn.utils import pdist, pdisp
+from kernlearn.utils import pdist, pdisp, nearest_neighbours
+from kernlearn.chebyshev import chebval
 
 
 class CuckerSmale:
-    """Cucker-Smale dynamics."""
+    """Cucker-Smale dynamics with k nearest neighbours."""
 
-    def __init__(self, K=-0.05, beta=1.0, sigma=1.0):
+    def __init__(self, k=None):
         self.id = "cucker-smale"
-        self.K = K
-        self.beta = beta
-        self.sigma = sigma
-        self.params = {"K": self.K, "beta": self.beta, "sigma": self.sigma}
+        self.k = k
+        self.params = {
+            "K": 0.046,
+            "beta": 2.835,
+        }
 
     def phi(self, r, params):
-        return params["K"] * (params["sigma"] ** 2 + r**2) ** (-params["beta"])
+        return params["K"] * (1.0 + r**2) ** (-params["beta"])
 
     def f(self, state, time, params):
         x, v = state
-        r = pdist(pdisp(x, x))
-        dvdt = jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=0)
+        r = pdist(x, x)
+        if self.k is not None:
+            rknn, idx = nearest_neighbours(r, self.k)
+            dvdt = jnp.mean(
+                self.phi(rknn, params)[..., None] * -pdisp(v, v, idx), axis=1
+            )
+        else:
+            dvdt = jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=0)
         dxdt = v
         return dxdt, dvdt
 
@@ -32,27 +40,96 @@ class CuckerSmale:
 class CuckerSmaleRayleigh:
     """Cucker-Smale dynamics with Rayleigh-type friction force."""
 
-    def __init__(self, K=0.0, beta=0.5, sigma=1.0, p=8e-1, kappa=2.7e-2):
+    def __init__(self, seed=0, K=0.0, beta=0.5, p=8e-1, kappa=2.7e-2):
         self.id = "cucker-smale-rayleigh"
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
         self.K = K
         self.beta = beta
-        self.sigma = sigma
         self.p = p
         self.kappa = kappa
         self.params = {
             "K": self.K,
             "beta": self.beta,
-            "sigma": self.sigma,
             "p": self.p,
             "kappa": self.kappa,
         }
 
     def phi(self, r, params):
-        return params["K"] * (params["sigma"] ** 2 + r**2) ** (-params["beta"])
+        return params["K"] * (1 + r**2) ** (-params["beta"])
 
     def f(self, state, time, params):
         x, v = state
-        r = pdist(pdisp(x, x))
+        r = pdist(x, x)
+        F = (
+            params["kappa"]
+            * v
+            * (1 - jnp.linalg.norm(v, axis=-1, keepdims=True) ** params["p"])
+        )
+        dvdt = F + jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=0)
+        dxdt = v
+        return dxdt, dvdt
+
+
+class CuckerSmaleCheb:
+    """Cucker-Smale dynamics with Chebychev approximation of phi."""
+
+    def __init__(self, seed=0, n=5, k=None):
+        self.id = "cucker-smale-rayleigh-cheb"
+        self.k = k
+        self.n = n  # polynomial order
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
+        self.params = {
+            "c": 0.1
+            * random.normal(self.rng, (n + 1,))
+            * (1e-8 + jnp.exp(-jnp.arange(1, n + 2)))
+        }
+        self.hparams = {"n": self.n}
+
+    def phi(self, r, params):
+        return chebval(r, params["c"])
+
+    def f(self, state, time, params):
+        x, v = state
+        r = pdist(x, x)
+        if self.k is not None:
+            rknn, idx = nearest_neighbours(r, self.k)
+            dvdt = jnp.mean(
+                self.phi(rknn, params)[..., None] * -pdisp(v, v, idx), axis=1
+            )
+        else:
+            dvdt = jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=0)
+        dxdt = v
+        return dxdt, dvdt
+
+
+class CuckerSmaleRayleighCheb:
+    """Cucker-Smale dynamics with Rayleigh-type friction force and
+    Chebychev approximation of phi."""
+
+    def __init__(self, seed=0, n=5, p=8e-1, kappa=2.7e-2):
+        self.id = "cucker-smale-rayleigh-cheb"
+        self.n = n  # polynomial order
+        self.p = p
+        self.kappa = kappa
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
+        self.params = {
+            "c": random.normal(self.rng, (n + 1,)) / jnp.sqrt(n + 1),
+            "p": self.p,
+            "kappa": self.kappa,
+        }
+        self.hparams = {
+            "n": self.n,
+        }
+
+    def phi(self, r, params):
+        return chebval(r, params["c"])
+
+    def f(self, state, time, params):
+        x, v = state
+        r = pdist(x, x)
         F = (
             params["kappa"]
             * v
@@ -93,7 +170,7 @@ class FirstOrderPredatorPrey:
         rxx = pdist(xx)
         rxu = pdist(xu)
         Fa = jnp.mean(self.phi_a(rxx, params)[..., None] * -xx, axis=0)
-        Fb = self.phi_b(rxu, params) * jnp.squeeze(xu)
+        Fb = self.phi_b(rxu, params) * xu.squeeze()
         Fc = jnp.mean(self.phi_c(rxu, params)[..., None] * xu, axis=0)
         return jnp.vstack((Fa + Fb, Fc))
 
@@ -102,32 +179,107 @@ class CuckerSmaleNN:
     """Cucker-Smale dynamics with neural network approximation of phi."""
 
     def __init__(
-        self, hidden_layer_sizes=[8], activation="tanh", dropout_rate=0.0, seed=0
+        self,
+        k=None,
+        hidden_layer_sizes=[8],
+        activation="tanh",
+        dropout_rate=0.0,
+        seed=0,
     ):
         self.id = "cucker-smale-nn"
+        self.k = k
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = getattr(jax.nn, activation)
+        self.dropout_rate = dropout_rate
         self.hparams = {
             "hidden_layer_sizes": hidden_layer_sizes,
             "activation": activation,
             "dropout_rate": dropout_rate,
         }
-        self.output_sizes = hidden_layer_sizes + [1]
-        self.activation = getattr(jax.nn, activation)
         self.seed = seed
-        self.dropout_rate = dropout_rate
-        self.rng = jax.random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(
-            r, self.dropout_rate, self.rng
-        )
+        self.rng = random.PRNGKey(self.seed)
+        _train_mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(r, self.dropout_rate, self.rng)
+        _mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(
+            r
+        )  # no dropout
+        self.train_mlp = hk.transform(_train_mlp)
         self.mlp = hk.transform(_mlp)
         self.params = self.mlp.init(self.rng, jnp.array([0.0]))
 
+    def phi(self, r, params, training=False):
+        if training:
+            return self.train_mlp.apply(params, self.rng, r.reshape(-1, 1)).reshape(
+                r.shape
+            )
+        else:
+            return self.mlp.apply(params, self.rng, r.reshape(-1, 1)).reshape(r.shape)
+
+    def _f(self, state, time, params, training):
+        x, v = state
+        r = pdist(x, x)
+        if self.k is not None:
+            rknn, idx = nearest_neighbours(r, self.k)
+            dvdt = jnp.mean(
+                self.phi(rknn, params, training)[..., None] * -pdisp(v, v, idx), axis=1
+            )
+        else:
+            dvdt = jnp.mean(
+                self.phi(r, params, training)[..., None] * -pdisp(v, v), axis=0
+            )
+        dxdt = v
+        return dxdt, dvdt
+
+    f = partialmethod(_f, training=False)
+    f_training = partialmethod(_f, training=True)
+
+
+class CuckerSmaleFNN:
+    """Cucker-Smale dynamics with neural network approximation of phi and F."""
+
+    def __init__(
+        self, hidden_layer_sizes=[8], activation="tanh", dropout_rate=0.0, seed=0
+    ):
+        self.id = "cucker-smale-f-nn"
+        self.hparams = {
+            "hidden_layer_sizes": hidden_layer_sizes,
+            "activation": activation,
+            "dropout_rate": dropout_rate,
+        }
+        self.activation = getattr(jax.nn, activation)
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
+        self.dropout_rate = dropout_rate
+        _mlp1 = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(r, self.dropout_rate, self.rng)
+        _mlp2 = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [2], activation=self.activation
+        )(r, self.dropout_rate, self.rng)
+        self.mlp1 = hk.transform(_mlp1)
+        self.mlp2 = hk.transform(_mlp2)
+        self.params = {
+            "phi": self.mlp1.init(self.rng, jnp.array([0.0])),
+            "F": self.mlp2.init(self.rng, jnp.array([0.0, 0.0])),
+        }
+
     def phi(self, r, params):
-        return self.mlp.apply(params, self.rng, r.reshape(-1, 1)).reshape(r.shape)
+        return self.mlp1.apply(params["phi"], self.rng, r.reshape(-1, 1)).reshape(
+            r.shape
+        )
+
+    def F(self, v, params):
+        return self.mlp2.apply(params["F"], self.rng, v)
 
     def f(self, state, time, params):
         x, v = state
-        r = pdist(pdisp(x, x))
-        dvdt = jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=0)
+        r = pdist(x, x)
+        dvdt = self.F(v, params) + jnp.mean(
+            self.phi(r, params)[..., None] * -pdisp(v, v), axis=0
+        )
         dxdt = v
         return dxdt, dvdt
 
@@ -157,7 +309,7 @@ class CuckerSmaleRayleighNN:
         self.kappa = kappa
         self.dropout_rate = dropout_rate
         self.p = p
-        self.rng = jax.random.PRNGKey(self.seed)
+        self.rng = random.PRNGKey(self.seed)
         _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(
             r, self.dropout_rate, self.rng
         )
@@ -173,7 +325,7 @@ class CuckerSmaleRayleighNN:
 
     def f(self, state, time, params):
         x, v = state
-        r = pdist(pdisp(x, x))
+        r = pdist(x, x)
         F = (
             params["kappa"]
             * v
@@ -194,7 +346,7 @@ class FirstOrderNeuralODE:
         self.output_sizes = hidden_layer_sizes + [N * d]
         self.activation = getattr(jax.nn, activation)
         self.seed = seed
-        self.rng = jax.random.PRNGKey(self.seed)
+        self.rng = random.PRNGKey(self.seed)
         _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
         self.mlp = hk.transform(_mlp)
         dummy_input = jnp.zeros(self.output_sizes[-1])
@@ -218,7 +370,7 @@ class SecondOrderNeuralODE:
         self.activation = getattr(jax.nn, activation)
         self.dropout_rate = dropout_rate
         self.seed = seed
-        self.rng = jax.random.PRNGKey(self.seed)
+        self.rng = random.PRNGKey(self.seed)
         _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(
             r, self.dropout_rate, self.rng
         )
@@ -243,7 +395,7 @@ class FirstOrderPredatorPreyNN3:
         self.output_sizes = hidden_layer_sizes + [1]
         self.activation = getattr(jax.nn, activation)
         self.seed = seed
-        self.rng = jax.random.PRNGKey(self.seed)
+        self.rng = random.PRNGKey(self.seed)
         _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
         self.mlp_a = hk.transform(_mlp)
         self.mlp_b = hk.transform(_mlp)
@@ -276,7 +428,7 @@ class FirstOrderPredatorPreyNN3:
         rxx = pdist(xx)
         rxu = pdist(xu)
         Fa = jnp.mean(self.phi_a(rxx, params)[..., None] * -xx, axis=0)
-        Fb = self.phi_b(rxu, params) * jnp.squeeze(xu)
+        Fb = self.phi_b(rxu, params) * xu.squeeze()
         Fc = jnp.mean(self.phi_c(rxu, params)[..., None] * xu, axis=0)
         return jnp.vstack((Fa + Fb, Fc))
 
@@ -290,7 +442,7 @@ class SecondOrderPredatorPreyNN3:
         self.output_sizes = hidden_layer_sizes + [1]
         self.activation = getattr(jax.nn, activation)
         self.seed = seed
-        self.rng = jax.random.PRNGKey(self.seed)
+        self.rng = random.PRNGKey(self.seed)
         _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
         self.mlp_a = hk.transform(_mlp)
         self.mlp_b = hk.transform(_mlp)
@@ -323,6 +475,9 @@ class SecondOrderPredatorPreyNN3:
         rxx = pdist(xx)
         rxu = pdist(xu)
         Fa = jnp.mean(self.phi_a(rxx, params)[..., None] * -xx, axis=0)
-        Fb = self.phi_b(rxu, params) * jnp.squeeze(xu)
+        Fb = self.phi_b(rxu, params) * xu.squeeze()
         Fc = jnp.mean(self.phi_c(rxu, params)[..., None] * xu, axis=0)
         return jnp.vstack((Fa + Fb, Fc))
+
+
+# class SecondOrderSheep:
