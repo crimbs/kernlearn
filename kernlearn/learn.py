@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable
+from typing import Callable, Tuple
 
 import optax
 import jax.numpy as jnp
@@ -12,12 +12,15 @@ class MLE:
     def __init__(
         self, optimiser: str = "adam", learning_rate: float = 1e-3, n_epochs: int = 50
     ):
+        assert optimiser in optax.__all__, "Must be an optax optimiser."
         self.optimiser = optimiser
         self.learning_rate = learning_rate
-        self.n_epochs = n_epochs
+        self.n_epochs = int(n_epochs)
 
     @staticmethod
-    def _forward(params: dict, data: dict, dynamics: Callable):
+    def _forward(
+        params: dict, data: dict, dynamics: Callable
+    ) -> Tuple[jnp.array, jnp.array]:
         """dynamics is ODE function with signature dynamics(state, time, params)"""
         inputs = (data["x"][0], data["v"][0])
         if "u" in data:
@@ -39,19 +42,14 @@ class MLE:
             v_sq_error = jnp.linalg.norm((v_pred - data["v"]), ord, axis=-1) ** 2
             return jnp.sum(x_sq_error) + jnp.sum(v_sq_error)
 
-        # Initialise optax optimiser
         optimiser = getattr(optax, self.optimiser)(self.learning_rate)
         opt_state = optimiser.init(model.params)
-        # Initialise train and test loss history in list
         self.train_loss = [float(loss_fn(model.params, train_data))]
         self.test_loss = [float(loss_fn(model.params, test_data))]
-        # Main loop
         for _ in trange(self.n_epochs):
-            # Compute gradients and update parameters
             grads = grad(loss_fn)(model.params, train_data)
             updates, opt_state = optimiser.update(grads, opt_state)
             model.params = optax.apply_updates(model.params, updates)
-            # Record updated train and test loss values
             self.train_loss.append(float(loss_fn(model.params, train_data)))
             self.test_loss.append(float(loss_fn(model.params, test_data)))
             if verbose:
