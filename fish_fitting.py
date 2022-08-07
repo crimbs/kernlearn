@@ -9,10 +9,13 @@ from kernlearn.utils import data_loader, train_test_split
 from kernlearn.plot_utils import *
 from kernlearn.models import *
 
+path = os.path.join("figures", "fish", "fish_fitting")
+
 # Initialize data, optimiser, and various dictionaries
 data = data_loader("data/fish/json/processed_data.json")
 train_data, test_data = train_test_split(data, ind=28)
 mle = MLE(optimiser="adam", learning_rate=1e-3, n_epochs=50)
+json.dump(mle.__dict__, open(os.path.join(path, type(mle).__name__ + ".json"), "w"))
 r = np.linspace(0, 1, num=300)
 test_loss_dict = {}
 train_loss_dict = {}
@@ -30,27 +33,27 @@ def opt_loop(model, n=1, start=11):
         phi_matrix[i, :] = np.asarray(model.phi(r, model.params))
         train_loss_matrix[i, :] = np.asarray(mle.train_loss)
         test_loss_matrix[i, :] = np.asarray(mle.test_loss)
-    train_loss_dict[model.id] = (
+    train_loss_dict[type(model).__name__] = (
         np.mean(train_loss_matrix, axis=0),
         np.std(train_loss_matrix, axis=0),
     )
-    test_loss_dict[model.id] = (
+    test_loss_dict[type(model).__name__] = (
         np.mean(test_loss_matrix, axis=0),
         np.std(test_loss_matrix, axis=0),
     )
     # Phi estimate
-    phi_dict[model.id] = (
+    phi_dict[type(model).__name__] = (
         np.mean(phi_matrix, axis=0),
         np.std(phi_matrix, axis=0),
     )
     # Trajectory prediction
-    x_train, v_train = mle.predict(train_data, model)
-    x_test, v_test = mle.predict(test_data, model)
+    x_train, v_train = mle.predict(model.params, train_data)
+    x_test, v_test = mle.predict(model.params, test_data)
     return x_train, v_train, x_test, v_test
 
 
 # Initialise models
-k = 7
+k = None
 V = CuckerSmale(k=k)
 NN = CuckerSmaleNN(k=k, hidden_layer_sizes=[8], activation="tanh", dropout_rate=0.3)
 CH = CuckerSmaleCheb(k=k, n=40)
@@ -92,7 +95,4 @@ trajectory_plot(CH_test_ax, x_CH_test, v_CH_test, color=color_list[2])
 phi_comparison_plot(phi_ax, r, phi_dict, color_list)
 loss_comparison_plot(loss_ax, train_loss_dict, color_list, linestyle="solid")
 loss_comparison_plot(loss_ax, test_loss_dict, color_list, linestyle="dashed")
-path = os.path.join("figures", "fish", "fish_fitting")
 fig.savefig(os.path.join(path, "phi_loss_comparison.pdf"))
-plot_info = {"opt_hparams": mle.hparams, NN.id: NN.hparams, CH.id: CH.hparams}
-json.dump(plot_info, open(os.path.join(path, "phi_loss_comparison.txt"), "w"))

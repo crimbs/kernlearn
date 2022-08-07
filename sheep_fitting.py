@@ -14,7 +14,7 @@ model = SecondOrderSheep(
     activation="tanh",
     dropout_rate=0.3,
 )
-path = os.path.join("figures", "sheep", "E2", model.id)
+path = os.path.join("figures", "sheep", "E2", type(model).__name__)
 mle = MLE(optimiser="adam", learning_rate=1e-3, n_epochs=150)
 mle.fit(model, train_data, test_data)
 

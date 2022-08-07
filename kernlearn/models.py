@@ -14,7 +14,6 @@ class CuckerSmale:
     """Cucker-Smale dynamics with k nearest neighbours."""
 
     def __init__(self, k=None):
-        self.id = "cucker-smale"
         self.k = k
         self.params = {
             "K": 0.046,
@@ -42,7 +41,6 @@ class CuckerSmaleRayleigh:
     """Cucker-Smale dynamics with Rayleigh-type friction force."""
 
     def __init__(self, seed=0, K=0.0, beta=0.5, p=8e-1, kappa=2.7e-2):
-        self.id = "cucker-smale-rayleigh"
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
         self.K = K
@@ -76,7 +74,6 @@ class CuckerSmaleCheb:
     """Cucker-Smale dynamics with Chebychev approximation of phi."""
 
     def __init__(self, seed=0, n=5, k=None, rmax=2):
-        self.id = "cucker-smale-rayleigh-cheb"
         self.k = k
         self.n = n  # polynomial order
         self.rmax = rmax
@@ -87,7 +84,6 @@ class CuckerSmaleCheb:
             * random.normal(self.rng, (n + 1,))
             * (1e-8 + jnp.exp(-jnp.arange(1, n + 2)))
         }
-        self.hparams = {"n": self.n}
 
     def phi(self, r, params):
         return chebval(r / self.rmax, params["c"])
@@ -111,7 +107,6 @@ class CuckerSmaleRayleighCheb:
     Chebychev approximation of phi."""
 
     def __init__(self, seed=0, n=5, p=8e-1, kappa=2.7e-2):
-        self.id = "cucker-smale-rayleigh-cheb"
         self.n = n  # polynomial order
         self.p = p
         self.kappa = kappa
@@ -121,9 +116,6 @@ class CuckerSmaleRayleighCheb:
             "c": random.normal(self.rng, (n + 1,)) / jnp.sqrt(n + 1),
             "p": self.p,
             "kappa": self.kappa,
-        }
-        self.hparams = {
-            "n": self.n,
         }
 
     def phi(self, r, params):
@@ -146,7 +138,6 @@ class FirstOrderPredatorPrey:
     """First order predator prey model from Chen & Kolokolnikov (2014)."""
 
     def __init__(self, a=0.5, b=1.0, c=1.0, p=2.0):
-        self.id = "first-order-predator-prey"
         self.a = a
         self.b = b
         self.c = c
@@ -188,23 +179,17 @@ class CuckerSmaleNN:
         dropout_rate=0.0,
         seed=0,
     ):
-        self.id = "cucker-smale-nn"
         self.k = k
         self.hidden_layer_sizes = hidden_layer_sizes
-        self.activation = getattr(jax.nn, activation)
+        self.activation = activation
         self.dropout_rate = dropout_rate
-        self.hparams = {
-            "hidden_layer_sizes": hidden_layer_sizes,
-            "activation": activation,
-            "dropout_rate": dropout_rate,
-        }
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
         _train_mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, self.activation)
         )(r, self.dropout_rate, self.rng)
         _mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, self.activation)
         )(
             r
         )  # no dropout
@@ -245,21 +230,19 @@ class CuckerSmaleFNN:
     def __init__(
         self, hidden_layer_sizes=[8], activation="tanh", dropout_rate=0.0, seed=0
     ):
-        self.id = "cucker-smale-f-nn"
-        self.hparams = {
-            "hidden_layer_sizes": hidden_layer_sizes,
-            "activation": activation,
-            "dropout_rate": dropout_rate,
-        }
-        self.activation = getattr(jax.nn, activation)
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = activation
+        self.dropout_rate = dropout_rate
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = activation
+        self.dropout_rate = dropout_rate
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
-        self.dropout_rate = dropout_rate
         _mlp1 = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, self.activation)
         )(r, self.dropout_rate, self.rng)
         _mlp2 = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [2], activation=self.activation
+            self.hidden_layer_sizes + [2], activation=getattr(jax.nn, self.activation)
         )(r, self.dropout_rate, self.rng)
         self.mlp1 = hk.transform(_mlp1)
         self.mlp2 = hk.transform(_mlp2)
@@ -299,22 +282,16 @@ class CuckerSmaleRayleighNN:
         p=8e-1,
         kappa=2.7e-2,
     ):
-        self.id = "cucker-smale-rayleigh-nn"
-        self.hparams = {
-            "hidden_layer_sizes": hidden_layer_sizes,
-            "activation": activation,
-            "dropout_rate": dropout_rate,
-        }
-        self.output_sizes = hidden_layer_sizes + [1]
-        self.activation = getattr(jax.nn, activation)
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = activation
+        self.dropout_rate = dropout_rate
         self.seed = seed
         self.kappa = kappa
-        self.dropout_rate = dropout_rate
         self.p = p
         self.rng = random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(
-            r, self.dropout_rate, self.rng
-        )
+        _mlp = lambda r: hk.nets.MLP(
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
+        )(r, self.dropout_rate, self.rng)
         self.mlp = hk.transform(_mlp)
         self.params = {
             "nn": self.mlp.init(self.rng, jnp.array([0.0])),
@@ -344,12 +321,12 @@ class FirstOrderNeuralODE:
     Input and output size should be N x d."""
 
     def __init__(self, N, d, hidden_layer_sizes=[64], activation="tanh", seed=0):
-        self.id = "firs-order-neural-ode"
         self.output_sizes = hidden_layer_sizes + [N * d]
-        self.activation = getattr(jax.nn, activation)
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
+        _mlp = lambda r: hk.nets.MLP(
+            self.output_sizes, activation=getattr(jax.nn, activation)
+        )(r)
         self.mlp = hk.transform(_mlp)
         dummy_input = jnp.zeros(self.output_sizes[-1])
         self.params = self.mlp.init(self.rng, dummy_input)
@@ -367,15 +344,13 @@ class SecondOrderNeuralODE:
     def __init__(
         self, N, d, hidden_layer_sizes=[64], activation="tanh", dropout_rate=0.0, seed=0
     ):
-        self.id = "second-order-neural-ode"
         self.output_sizes = hidden_layer_sizes + [2 * N * d]
-        self.activation = getattr(jax.nn, activation)
         self.dropout_rate = dropout_rate
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(
-            r, self.dropout_rate, self.rng
-        )
+        _mlp = lambda r: hk.nets.MLP(
+            self.output_sizes, activation=getattr(jax.nn, activation)
+        )(r, self.dropout_rate, self.rng)
         self.mlp = hk.transform(_mlp)
         dummy_input = jnp.zeros(self.output_sizes[-1])
         self.params = self.mlp.init(self.rng, dummy_input)
@@ -392,12 +367,12 @@ class FirstOrderPredatorPreyNN3:
     neural network approximation of all three kernels."""
 
     def __init__(self, hidden_layer_sizes=[8], activation="tanh", seed=0):
-        self.id = "first-order-predator-prey-nn"
         self.output_sizes = hidden_layer_sizes + [1]
-        self.activation = getattr(jax.nn, activation)
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
+        _mlp = lambda r: hk.nets.MLP(
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
+        )(r)
         self.mlp_a = hk.transform(_mlp)
         self.mlp_b = hk.transform(_mlp)
         self.mlp_c = hk.transform(_mlp)
@@ -439,12 +414,12 @@ class SecondOrderPredatorPreyNN3:
     neural network approximation of all three forces."""
 
     def __init__(self, hidden_layer_sizes=[8], activation="tanh", seed=0):
-        self.id = "second-order-predator-prey-nn"
         self.output_sizes = hidden_layer_sizes + [1]
-        self.activation = getattr(jax.nn, activation)
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
-        _mlp = lambda r: hk.nets.MLP(self.output_sizes, activation=self.activation)(r)
+        _mlp = lambda r: hk.nets.MLP(
+            self.output_sizes, activation=getattr(jax.nn, activation)
+        )(r)
         self.mlp_a = hk.transform(_mlp)
         self.mlp_b = hk.transform(_mlp)
         self.mlp_c = hk.transform(_mlp)
@@ -494,24 +469,18 @@ class SecondOrderSheep:
         dropout_rate=0.0,
         seed=0,
     ):
-        self.id = "second-order-sheep"
         self.k = k
         self.N = N
         self.hidden_layer_sizes = hidden_layer_sizes
-        self.activation = getattr(jax.nn, activation)
+        self.activation = activation
         self.dropout_rate = dropout_rate
-        self.hparams = {
-            "hidden_layer_sizes": hidden_layer_sizes,
-            "activation": activation,
-            "dropout_rate": dropout_rate,
-        }
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
         _train_mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
         )(r, self.dropout_rate, self.rng)
         _mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
         )(
             r
         )  # no dropout
@@ -579,24 +548,18 @@ class SecondOrderDog:
         dropout_rate=0.0,
         seed=0,
     ):
-        self.id = "second-order-dog"
         self.k = k
         self.mu0 = mu0  # friction coefficient
         self.hidden_layer_sizes = hidden_layer_sizes
-        self.activation = getattr(jax.nn, activation)
+        self.activation = activation
         self.dropout_rate = dropout_rate
-        self.hparams = {
-            "hidden_layer_sizes": hidden_layer_sizes,
-            "activation": activation,
-            "dropout_rate": dropout_rate,
-        }
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
         _train_mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
         )(r, self.dropout_rate, self.rng)
         _mlp = lambda r: hk.nets.MLP(
-            hidden_layer_sizes + [1], activation=self.activation
+            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, activation)
         )(
             r
         )  # no dropout
