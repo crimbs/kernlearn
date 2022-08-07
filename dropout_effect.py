@@ -41,4 +41,4 @@ if colorbar:
     cb = fig.colorbar(sm, ax=ax[0], location="top")
     cb.outline.set_visible(False)
     cb.set_ticks([])
-fig.savefig(os.path.join("figures", "fish", "dropout", "dropout.pdf"))
+fig.savefig(os.path.join("figures", "fish", "dropout_effect", "dropout.pdf"))

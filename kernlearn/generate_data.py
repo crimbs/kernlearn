@@ -2,11 +2,12 @@ import jax.numpy as jnp
 from jax import jit
 from jax import random
 from jax.experimental.ode import odeint
-from jax import config
 
-config.update("jax_enable_x64", True)
 
-from kernlearn.utils import min_max_scaler
+def min_max_scaler(X: jnp.array):
+    """Transform state by scaling each dimension to [0, 1]."""
+    X_std = (X - X.min(axis=(0, 1))) / (X.max(axis=(0, 1)) - X.min(axis=(0, 1)))
+    return X_std
 
 
 def generate_data(model, seed=0, nsteps=95, N=50, d=2, ss=0):

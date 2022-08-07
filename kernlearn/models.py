@@ -3,9 +3,10 @@ from functools import partialmethod
 import jax
 import jax.numpy as jnp
 from jax import random
+from jax.scipy.ndimage import map_coordinates
 import haiku as hk
 
-from kernlearn.utils import pdist, pdisp, nearest_neighbours
+from kernlearn.utils import pdist, pdisp, nearest_neighbours, normalise
 from kernlearn.chebyshev import chebval
 
 
@@ -74,10 +75,11 @@ class CuckerSmaleRayleigh:
 class CuckerSmaleCheb:
     """Cucker-Smale dynamics with Chebychev approximation of phi."""
 
-    def __init__(self, seed=0, n=5, k=None):
+    def __init__(self, seed=0, n=5, k=None, rmax=2):
         self.id = "cucker-smale-rayleigh-cheb"
         self.k = k
         self.n = n  # polynomial order
+        self.rmax = rmax
         self.seed = seed
         self.rng = random.PRNGKey(self.seed)
         self.params = {
@@ -88,7 +90,7 @@ class CuckerSmaleCheb:
         self.hparams = {"n": self.n}
 
     def phi(self, r, params):
-        return chebval(r, params["c"])
+        return chebval(r / self.rmax, params["c"])
 
     def f(self, state, time, params):
         x, v = state
@@ -380,7 +382,6 @@ class SecondOrderNeuralODE:
 
     def f(self, state, time, params):
         x_and_v = jnp.concatenate(state)
-        state_and_time = jnp.hstack([state, jnp.array(time)])
         state_and_time = jnp.concatenate((x_and_v.ravel(), time))
         forward = self.mlp.apply(params, self.rng, state_and_time)
         return jnp.vsplit(forward.reshape(x_and_v.shape), 2)
@@ -478,3 +479,162 @@ class SecondOrderPredatorPreyNN3:
         Fb = self.phi_b(rxu, params) * xu.squeeze()
         Fc = jnp.mean(self.phi_c(rxu, params)[..., None] * xu, axis=0)
         return jnp.vstack((Fa + Fb, Fc))
+
+
+class SecondOrderSheep:
+    """Just sheep with NN approximation of inter-sheep forces and
+    force between sheep and dog."""
+
+    def __init__(
+        self,
+        k=None,
+        N=1,
+        hidden_layer_sizes=[8],
+        activation="tanh",
+        dropout_rate=0.0,
+        seed=0,
+    ):
+        self.id = "second-order-sheep"
+        self.k = k
+        self.N = N
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = getattr(jax.nn, activation)
+        self.dropout_rate = dropout_rate
+        self.hparams = {
+            "hidden_layer_sizes": hidden_layer_sizes,
+            "activation": activation,
+            "dropout_rate": dropout_rate,
+        }
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
+        _train_mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(r, self.dropout_rate, self.rng)
+        _mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(
+            r
+        )  # no dropout
+        self.Ftrain_mlp = hk.transform(_train_mlp)
+        self.Gtrain_mlp = hk.transform(_train_mlp)
+        self.Fmlp = hk.transform(_mlp)
+        self.Gmlp = hk.transform(_mlp)
+        Frng, Grng = random.split(self.rng)
+        self.params = {
+            "mu": random.uniform(self.rng, (self.N, 1)),  # friction coefficients
+            "F": self.Fmlp.init(Frng, jnp.array([0.0])),
+            "G": self.Gmlp.init(Grng, jnp.array([0.0])),
+        }
+
+    def F(self, r, params, training=False):
+        if training:
+            return self.Ftrain_mlp.apply(
+                params["F"], self.rng, r.reshape(-1, 1)
+            ).reshape(r.shape)
+        else:
+            return self.Fmlp.apply(params["F"], self.rng, r.reshape(-1, 1)).reshape(
+                r.shape
+            )
+
+    def G(self, r, params, training=False):
+        if training:
+            return self.Gtrain_mlp.apply(
+                params["G"], self.rng, r.reshape(-1, 1)
+            ).reshape(r.shape)
+        else:
+            return self.Gmlp.apply(params["G"], self.rng, r.reshape(-1, 1)).reshape(
+                r.shape
+            )
+
+    def _f(self, state, time, params, control, training):
+        x, v = state
+        u = map_coordinates(
+            control.squeeze(), jnp.array([[time, time], [0.0, 1.0]]), order=1
+        )
+        xx = pdisp(x, x)
+        xu = pdisp(x, u)
+        rxx = pdist(xx)
+        rxu = pdist(xu)
+        xxhat = normalise(xx)
+        xuhat = normalise(xu)
+        Fprey = jnp.mean(self.F(rxx, params, training)[..., None] * xxhat, axis=1)
+        Fpred = self.G(rxu, params, training) * xuhat.squeeze()
+        dvdt = -params["mu"] * v + Fprey + Fpred
+        dxdt = v
+        return dxdt, dvdt
+
+    f = partialmethod(_f, training=False)
+    f_training = partialmethod(_f, training=True)
+
+
+class SecondOrderDog:
+    """Just dog with NN approximation of force."""
+
+    def __init__(
+        self,
+        k=None,
+        mu0=0.0,
+        hidden_layer_sizes=[8],
+        activation="tanh",
+        dropout_rate=0.0,
+        seed=0,
+    ):
+        self.id = "second-order-dog"
+        self.k = k
+        self.mu0 = mu0  # friction coefficient
+        self.hidden_layer_sizes = hidden_layer_sizes
+        self.activation = getattr(jax.nn, activation)
+        self.dropout_rate = dropout_rate
+        self.hparams = {
+            "hidden_layer_sizes": hidden_layer_sizes,
+            "activation": activation,
+            "dropout_rate": dropout_rate,
+        }
+        self.seed = seed
+        self.rng = random.PRNGKey(self.seed)
+        _train_mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(r, self.dropout_rate, self.rng)
+        _mlp = lambda r: hk.nets.MLP(
+            hidden_layer_sizes + [1], activation=self.activation
+        )(
+            r
+        )  # no dropout
+        self.Htrain_mlp = hk.transform(_train_mlp)
+        self.Hmlp = hk.transform(_mlp)
+        self.params = {
+            "mu0": self.mu0,
+            "H": self.Hmlp.init(self.rng, jnp.array([0.0])),
+        }
+
+    def H(self, r, params, training=False):
+        if training:
+            return self.Htrain_mlp.apply(
+                params["H"], self.rng, r.reshape(-1, 1)
+            ).reshape(r.shape)
+        else:
+            return self.Hmlp.apply(params["H"], self.rng, r.reshape(-1, 1)).reshape(
+                r.shape
+            )
+
+    def _f(self, state, time, params, control, training):
+        x, v = state
+        N = control.shape[1]
+        u = jnp.array(
+            [
+                map_coordinates(
+                    control, jnp.array([[time, time], [i, i], [0.0, 1.0]]), order=1
+                ).tolist()
+                for i in range(N)
+            ]
+        )
+        xu = pdisp(x, u)
+        rxu = pdist(xu)
+        xuhat = normalise(xu)
+        force = jnp.mean(self.H(rxu, params, training) * xuhat.squeeze(), axis=1)
+        dvdt = -params["mu0"] * v + force
+        dxdt = v
+        return dxdt, dvdt
+
+    f = partialmethod(_f, training=False)
+    f_training = partialmethod(_f, training=True)

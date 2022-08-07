@@ -57,10 +57,12 @@ def nearest_neighbours(distance: jnp.array, k: int):
     return -dists, inds
 
 
-def min_max_scaler(X: jnp.array):
-    """Transform state by scaling each dimension to [0, 1]."""
-    X_std = (X - X.min(axis=(0, 1))) / (X.max(axis=(0, 1)) - X.min(axis=(0, 1)))
-    return X_std
+def normalise(x):
+    x_nonzero = x != 0
+    masked = jnp.where(x_nonzero, x, 1)
+    _normalise = lambda x: x / jnp.linalg.norm(x, axis=-1, keepdims=True)
+    xhat = jnp.where(x_nonzero, _normalise(masked), 0)
+    return xhat
 
 
 def data_loader(fname: str):

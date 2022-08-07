@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import networkx as nx
@@ -9,7 +10,7 @@ from kernlearn.utils import pdist, nearest_neighbours
 plt.style.use("classic")
 plt.rcParams.update(
     {
-        "figure.figsize": [5.6, 2.8],  # Width, height in inches
+        "figure.figsize": [5.6, 3],  # Width, height in inches
         "figure.constrained_layout.use": True,
         "text.usetex": True,
         "font.family": "serif",
@@ -20,9 +21,16 @@ plt.rcParams.update(
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
-        "image.cmap": "jet",
+        "image.cmap": "viridis",
     }
 )
+
+
+def kde_plot(ax, train_r, test_r):
+    sns.kdeplot(train_r, color="black", shade=True, ax=ax, linestyle="solid")
+    sns.kdeplot(test_r, color="black", shade=True, ax=ax, linestyle="dashed")
+    ax.set_xlim([0, 1])
+    ax.set_xlabel(r"Pairwise distance Pairwise distance $r$")
 
 
 def loss_plot(
@@ -45,26 +53,31 @@ def loss_plot(
     ax.legend(frameon=False)
 
 
-def loss_comparison_plot(ax, loss_dict, linestyle="solid"):
-    for key in loss_dict:
+def loss_comparison_plot(ax, loss_dict, color_list=["r", "g", "b"], linestyle="solid"):
+    for i, key in enumerate(loss_dict):
         loss, error = loss_dict[key]
         epochs = list(range(len(loss)))
         if error is not None:
-            ax.semilogy(epochs, loss, linestyle=linestyle, label=key)
+            ax.semilogy(
+                epochs, loss, color=color_list[i], linestyle=linestyle, label=key
+            )
             ax.fill_between(
                 epochs,
                 loss - error,
                 loss + error,
+                color=color_list[i],
                 linewidth=0,
                 alpha=0.2,
             )
         else:
-            ax.semilogy(epochs, loss, linestyle=linestyle, label=key)
+            ax.semilogy(
+                epochs, loss, color=color_list[i], linestyle=linestyle, label=key
+            )
     ax.set_xlim((epochs[0], epochs[-1]))
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
-    ax.legend(frameon=False)
+    # ax.legend(frameon=False)
 
 
 def trajectory_plot(ax, x, v, color="black", alpha=1):
@@ -140,40 +153,79 @@ def trajectory_comparison_plot(
     fig.savefig(os.path.join(path, fname))
 
 
-def predator_prey_plot(path, x_pred, x_prey):
-    fig, ax = plt.subplots()
-    ax.plot(x_pred[..., 0], x_pred[..., 1], "-k")
-    ax.plot(x_prey[..., 0], x_prey[..., 1], "or")
-    ax.set_xlabel(r"$x$")
-    ax.set_ylabel(r"$y$")
-    ax.axis("equal")
-    fig.savefig(os.path.join(path, "predator_prey.pdf"))
+def predator_prey_plot(ax, x_prey, v_prey, x_pred, v_pred, color="black", alpha=1.0):
+    x_prey = np.asarray(x_prey)
+    v_prey = np.asarray(v_prey)
+    x_pred = np.asarray(x_pred)
+    v_pred = np.asarray(v_pred)
+    vpreyhat = v_prey / np.linalg.norm(v_prey, axis=-1, keepdims=True)
+    vpredhat = v_pred / np.linalg.norm(v_pred, axis=-1, keepdims=True)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set(xlim=[0, 1], ylim=[0, 1])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.plot(x_prey[..., 0], x_prey[..., 1], color=color, linewidth=0.75, alpha=alpha)
+    ax.quiver(
+        x_prey[-1, :, 0],
+        x_prey[-1, :, 1],
+        vpreyhat[-1, :, 0],
+        vpreyhat[-1, :, 1],
+        angles="xy",
+        scale_units="xy",
+        scale=30,
+        headaxislength=5,
+        pivot="mid",
+        color=color,
+    )
+    ax.plot(x_pred[..., 0], x_pred[..., 1], color="red", linewidth=0.75, alpha=1.0)
+    ax.quiver(
+        x_pred[-1, :, 0],
+        x_pred[-1, :, 1],
+        vpredhat[-1, :, 0],
+        vpredhat[-1, :, 1],
+        angles="xy",
+        scale_units="xy",
+        scale=30,
+        headaxislength=5,
+        pivot="mid",
+        color="red",
+    )
 
 
 def phi_plot(ax, r, phi, error=0, color="black"):
     ax.plot(r, phi, color=color)
     ax.fill_between(r, phi - error, phi + error, color=color, alpha=0.2)
-    ax.set_xlabel(r"$r$")
-    ax.set_ylabel(r"$\phi(r)$")
+    ax.set_xlabel(r"Pairwise distance $r$")
+    ax.set_ylabel(r"Interaction kernel $\phi(r)$")
 
 
-def phi_comparison_plot(ax, r, phi_dict):
-    for key in phi_dict:
+def FG_plot(ax, r, F, G, color="black"):
+    ax[0].plot(r, F, color=color)
+    ax[1].plot(r, G, color=color)
+    ax[0].set_xticklabels([])
+    ax[1].set_xlabel(r"Pairwise distance $r$")
+    ax[0].set_ylabel(r"$F(r)$")
+    ax[1].set_ylabel(r"$G(r)$")
+
+
+def phi_comparison_plot(ax, r, phi_dict, color_list=["r", "g", "b"]):
+    for i, key in enumerate(phi_dict):
         phi, error = phi_dict[key]
         if error is not None:
-            ax.plot(r, phi, label=key)
+            ax.plot(r, phi, color=color_list[i], label=key)
             ax.fill_between(
                 r,
                 phi - error,
                 phi + error,
+                color=color_list[i],
                 linewidth=0,
                 alpha=0.2,
             )
         else:
-            ax.plot(r, phi, label=key)
-    ax.set_xlabel(r"$r$")
-    ax.set_ylabel(r"$\phi(r)$")
-    ax.legend(frameon=False)
+            ax.plot(r, phi, color=color_list[i], label=key)
+    ax.set_xlabel(r"Pairwise distance $r$")
+    ax.set_ylabel(r"Interaction kernel $\phi(r)$")
+    # ax.legend(frameon=False)
 
 
 def elbow_plot(ax, k_values, final_loss):

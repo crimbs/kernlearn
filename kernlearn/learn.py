@@ -6,7 +6,9 @@ from tqdm import trange
 
 
 class MLE:
-    def __init__(self, optimiser="adam", learning_rate=1e-3, n_epochs=50):
+    def __init__(
+        self, optimiser: str = "adam", learning_rate: float = 1e-3, n_epochs: int = 50
+    ):
         self.n_epochs = n_epochs
         self.optimiser = getattr(optax, optimiser)(learning_rate)
         self.hparams = {
@@ -15,18 +17,18 @@ class MLE:
             "n_epochs": n_epochs,
         }
 
-    def fit(self, model, train_data, test_data, verbose=False):
+    def fit(self, model, train_data: dict, test_data: dict, verbose: bool = False):
         # Some neural network models use dropout for training
-        if hasattr(model, "f_training"):
-            dynamics = jit(
-                lambda state, time, params: model.f_training(state, time, params)
-            )
-        else:
-            dynamics = jit(lambda state, time, params: model.f(state, time, params))
+        dynamics = (
+            jit(model.f_training) if hasattr(model, "f_training") else jit(model.f)
+        )
 
         def forward(params, data):
             inputs = (data["x"][0], data["v"][0])
-            return odeint(dynamics, inputs, data["t"], params)
+            if "u" in data:
+                return odeint(dynamics, inputs, data["t"], params, data["u"])
+            else:
+                return odeint(dynamics, inputs, data["t"], params)
 
         def loss_fn(params, data, ord=2):
             x_pred, v_pred = forward(params, data)
@@ -54,6 +56,9 @@ class MLE:
         return self
 
     def predict(self, data, model):
-        dynamics = jit(lambda state, time, params: model.f(state, time, params))
+        dynamics = jit(model.f)
         inputs = (data["x"][0], data["v"][0])
-        return odeint(dynamics, inputs, data["t"], model.params)
+        if "u" in data:
+            return odeint(dynamics, inputs, data["t"], model.params, data["u"])
+        else:
+            return odeint(dynamics, inputs, data["t"], model.params)
