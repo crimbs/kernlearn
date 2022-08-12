@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-from kernlearn.learn import MLE
+from kernlearn.learn import Optimisation
 from kernlearn.utils import data_loader, train_test_split
 from kernlearn.plot_utils import *
 from kernlearn.models import *
@@ -15,7 +15,7 @@ model = SecondOrderSheep(
     dropout_rate=0.3,
 )
 path = os.path.join("figures", "sheep", "E2", type(model).__name__)
-mle = MLE(optimiser="adam", learning_rate=1e-3, n_epochs=150)
+mle = Optimisation(optimiser="adam", learning_rate=1e-3, n_epochs=150)
 mle.fit(model, train_data, test_data)
 
 # Trajectory comparison

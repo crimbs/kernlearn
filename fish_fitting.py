@@ -4,7 +4,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kernlearn.learn import MLE
+from kernlearn.learn import Optimisation
 from kernlearn.utils import data_loader, train_test_split
 from kernlearn.plot_utils import *
 from kernlearn.models import *
@@ -14,7 +14,9 @@ path = os.path.join("figures", "fish", "fish_fitting")
 # Initialize data, optimiser, and various dictionaries
 data = data_loader("data/fish/json/processed_data.json")
 train_data, test_data = train_test_split(data, ind=28)
-mle = MLE(optimiser="adam", learning_rate=1e-3, n_epochs=50)
+mle = Optimisation(
+    optimiser="adam", learning_rate=1e-3, n_epochs=50, reg_coeff=0.01, batch_size=7
+)
 json.dump(mle.__dict__, open(os.path.join(path, type(mle).__name__ + ".json"), "w"))
 r = np.linspace(0, 1, num=300)
 test_loss_dict = {}
@@ -28,7 +30,7 @@ def opt_loop(model, n=1, start=11):
     test_loss_matrix = np.zeros((n, mle.n_epochs + 1))
     for i, seed in enumerate(range(start, start + n)):
         model.seed = seed
-        print(model.seed)
+        print(f"Seed: {model.seed}")
         mle.fit(model, train_data, test_data)
         phi_matrix[i, :] = np.asarray(model.phi(r, model.params))
         train_loss_matrix[i, :] = np.asarray(mle.train_loss)
@@ -55,8 +57,8 @@ def opt_loop(model, n=1, start=11):
 # Initialise models
 k = None
 V = CuckerSmale(k=k)
-NN = CuckerSmaleNN(k=k, hidden_layer_sizes=[8], activation="tanh", dropout_rate=0.3)
-CH = CuckerSmaleCheb(k=k, n=40)
+NN = CuckerSmaleNN(k=k, hidden_layer_sizes=[8], activation="elu", dropout_rate=0)
+CH = CuckerSmalePoly(n=40)
 
 x_V_train, v_V_train, x_V_test, v_V_test = opt_loop(V)
 x_NN_train, v_NN_train, x_NN_test, v_NN_test = opt_loop(NN)
@@ -82,7 +84,7 @@ true_train_ax.set_title("Ground Truth")
 V_train_ax.set_title(r"$K(\sigma^2+r^2)^{-\beta}$")
 NN_train_ax.set_title("Neural Network")
 CH_train_ax.set_title("Chebyshev")
-loss_ax.set_ylim([10e-2, 10e1])
+# loss_ax.set_ylim([10e-2, 10e1])
 color_list = ["r", "g", "b"]
 trajectory_plot(true_train_ax, train_data["x"], train_data["v"])
 trajectory_plot(true_test_ax, test_data["x"], train_data["v"])
