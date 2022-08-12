@@ -2,14 +2,14 @@ import os
 
 import matplotlib.pyplot as plt
 
-from kernlearn.learn import MLE
+from kernlearn.learn import Optimisation
 from kernlearn.models import CuckerSmale
 from kernlearn.utils import data_loader, train_test_split
 from kernlearn.plot_utils import elbow_plot
 
 data = data_loader("data/fish/json/processed_data.json")
 train_data, test_data = train_test_split(data, 28)
-mle = MLE(optimiser="adam", learning_rate=0.001, n_epochs=25)
+mle = Optimisation(optimiser="adam", learning_rate=0.001, n_epochs=25)
 model = CuckerSmale()
 k_values = list(range(2, 51, 2))
 final_loss = []

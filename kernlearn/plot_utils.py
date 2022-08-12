@@ -17,7 +17,7 @@ plt.rcParams.update(
         "font.serif": ["Computer Modern Roman"],
         "axes.titlesize": 10,
         "font.size": 10,
-        "legend.fontsize": 8,
+        "legend.fontsize": 9,
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
@@ -27,10 +27,12 @@ plt.rcParams.update(
 
 
 def kde_plot(ax, train_r, test_r):
-    sns.kdeplot(train_r, color="black", shade=True, ax=ax, linestyle="solid")
-    sns.kdeplot(test_r, color="black", shade=True, ax=ax, linestyle="dashed")
-    ax.set_xlim([0, 1])
-    ax.set_xlabel(r"Pairwise distance Pairwise distance $r$")
+    sns.kdeplot(
+        train_r, color="black", shade=True, ax=ax, linestyle="solid", label="Train"
+    )
+    sns.kdeplot(
+        test_r, color="black", shade=True, ax=ax, linestyle="dashed", label="Test"
+    )
 
 
 def loss_plot(
@@ -232,6 +234,12 @@ def elbow_plot(ax, k_values, final_loss):
     ax.plot(k_values, final_loss, "o-k")
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel(r"$k$")
+    ax.set_ylabel("Loss")
+
+
+def tau_elbow_plot(ax, tau_values, final_loss):
+    ax.plot(tau_values, final_loss, "o-k")
+    ax.set_xlabel(r"$\tau$")
     ax.set_ylabel("Loss")
 
 
