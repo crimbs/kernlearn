@@ -1,3 +1,4 @@
+import os
 import json
 
 import jax.numpy as jnp
@@ -80,3 +81,7 @@ def train_test_split(data: dict, ind: int):
         lambda x: x[ind:], data, is_leaf=lambda x: isinstance(x, jnp.ndarray)
     )
     return train_data, test_data
+
+
+def save_hyperparameters(opt, path):
+    json.dump(opt.__dict__, open(os.path.join(path, type(opt).__name__ + ".json"), "w"))

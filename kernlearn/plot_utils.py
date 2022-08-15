@@ -17,7 +17,7 @@ plt.rcParams.update(
         "font.serif": ["Computer Modern Roman"],
         "axes.titlesize": 10,
         "font.size": 10,
-        "legend.fontsize": 9,
+        "legend.fontsize": 7,
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
@@ -82,7 +82,7 @@ def loss_comparison_plot(ax, loss_dict, color_list=["r", "g", "b"], linestyle="s
     # ax.legend(frameon=False)
 
 
-def trajectory_plot(ax, x, v, color="black", alpha=1):
+def trajectory_plot(ax, x, v, color="black", alpha=1, linewidth=0.75, arrows=True):
     x = np.asarray(x)
     v = np.asarray(v)
     vn = v / np.linalg.norm(v, axis=-1)[..., None]  # Normalize
@@ -90,19 +90,20 @@ def trajectory_plot(ax, x, v, color="black", alpha=1):
     ax.set(xlim=[0, 1], ylim=[0, 1])
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.plot(x[..., 0], x[..., 1], color=color, linewidth=0.75, alpha=alpha)
-    ax.quiver(
-        x[-1, :, 0],
-        x[-1, :, 1],
-        vn[-1, :, 0],
-        vn[-1, :, 1],
-        angles="xy",
-        scale_units="xy",
-        scale=30,
-        headaxislength=5,
-        pivot="mid",
-        color=color,
-    )
+    ax.plot(x[..., 0], x[..., 1], color=color, linewidth=linewidth, alpha=alpha)
+    if arrows:
+        ax.quiver(
+            x[-1, :, 0],
+            x[-1, :, 1],
+            vn[-1, :, 0],
+            vn[-1, :, 1],
+            angles="xy",
+            scale_units="xy",
+            scale=30,
+            headaxislength=5,
+            pivot="mid",
+            color=color,
+        )
 
 
 def trajectory_comparison_plot(
@@ -196,9 +197,18 @@ def predator_prey_plot(ax, x_prey, v_prey, x_pred, v_pred, color="black", alpha=
 
 def phi_plot(ax, r, phi, error=0, color="black"):
     ax.plot(r, phi, color=color)
-    ax.fill_between(r, phi - error, phi + error, color=color, alpha=0.2)
+    ax.fill_between(
+        r,
+        phi - error,
+        phi + error,
+        color=color,
+        alpha=0.2,
+        linewidth=0,
+        label=r"$1\sigma$",
+    )
     ax.set_xlabel(r"Pairwise distance $r$")
     ax.set_ylabel(r"Interaction kernel $\phi(r)$")
+    ax.legend(frameon=False)
 
 
 def FG_plot(ax, r, F, G, color="black"):
@@ -230,8 +240,8 @@ def phi_comparison_plot(ax, r, phi_dict, color_list=["r", "g", "b"]):
     # ax.legend(frameon=False)
 
 
-def elbow_plot(ax, k_values, final_loss):
-    ax.plot(k_values, final_loss, "o-k")
+def elbow_plot(ax, k, loss):
+    ax.plot(k, loss, "ok")
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel(r"$k$")
     ax.set_ylabel("Loss")

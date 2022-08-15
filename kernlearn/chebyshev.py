@@ -5,16 +5,16 @@ from jax import lax
 
 
 @partial(jit, static_argnames=("tensor",))
-def chebval(x, c, tensor=True):
+def chebval(c, x, tensor=True):
     """
     Evaluate a Chebyshev series at points x.
 
     Parameters
     ----------
-    x : If `x` is a list or tuple, it is converted to an ndarray, otherwise
-        it is left unchanged and treated as a scalar.
     c : Array of coefficients ordered so that the coefficients for terms of
         degree n are contained in c[n].
+    x : If `x` is a list or tuple, it is converted to an ndarray, otherwise
+        it is left unchanged and treated as a scalar.
     tensor : If True, the shape of the coefficient array is extended with ones
         on the right, one for each dimension of `x`.
     """
