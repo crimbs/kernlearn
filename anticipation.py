@@ -17,6 +17,7 @@ def main():
     train_data, test_data = train_test_split(data, 28)
     opt = Optimisation(optimiser="adam", learning_rate=0.001, n_epochs=25)
     save_hyperparameters(opt, PATH)
+    opt.init_mle_loss_fn()
     model = CuckerSmaleAnticipation(seed=SEED)
     fig, ax = plt.subplots(2, figsize=(5.6, 4), sharex=True)
     for tau in jnp.linspace(0, 1, 21):

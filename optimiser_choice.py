@@ -20,11 +20,12 @@ def main():
         optimiser="adam",
         learning_rate=1e-3,
         n_epochs=50,
-        batch_size=28,
+        batch_size=7,
         seed=SEED,
         reg_coeff=0.0,
     )
     save_hyperparameters(opt, PATH)
+    opt.init_mle_loss_fn()
     epochs = list(range(opt.n_epochs + 1))
     model = CuckerSmaleNN(
         seed=SEED,

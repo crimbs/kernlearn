@@ -16,9 +16,10 @@ def main():
     train_data, test_data = train_test_split(data, 28)
     opt = Optimisation(optimiser="adam", learning_rate=0.001, n_epochs=25)
     save_hyperparameters(opt, PATH)
+    opt.init_mle_loss_fn()
     model = CuckerSmaleKNN(seed=SEED)
     fig, ax = plt.subplots(2, figsize=(5.6, 4), sharex=True)
-    for k in range(1, 51, 2):
+    for k in range(1, 51):
         model.k = k
         opt.fit(model, train_data, test_data)
         ax[0].plot(model.k, opt.train_loss[-1], ".-k")

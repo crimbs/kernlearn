@@ -1,3 +1,10 @@
+"""The following is taken from a pull request [1] by user gderossi to include
+Chebyshev polynomials as part of Jax, under Apache License, Version 2.0. It is
+essentially a Jax implementation of the numpy.chebval function.
+
+[1] https://github.com/google/jax/pull/11093
+"""
+
 from functools import partial
 import jax.numpy as jnp
 from jax import jit

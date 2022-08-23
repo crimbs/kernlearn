@@ -1,10 +1,13 @@
 import os
 import json
+import random
+from typing import Dict, Callable
 
 import jax.numpy as jnp
 from jax import jit
 from jax.lax import top_k
 from jax.tree_util import tree_map
+from jax.experimental.ode import odeint
 
 
 @jit
@@ -85,3 +88,39 @@ def train_test_split(data: dict, ind: int):
 
 def save_hyperparameters(opt, path):
     json.dump(opt.__dict__, open(os.path.join(path, type(opt).__name__ + ".json"), "w"))
+
+
+def get_batches(data: Dict, n_batches: int, seed: int):
+    """Batches the data dictionary into `n_batches` minibatches and shuffles them.
+    Each minibatch can be retrieved by `tree_map(next, shuffled_minibatches)`.
+
+    Returns
+    -------
+    shuffled_minibatches : a dict of list_iterator objects
+    """
+
+    def batch_fn(data):
+        split_data = jnp.array_split(data, n_batches)
+        random.Random(seed).shuffle(split_data)  # in-place operation
+        return iter(split_data)
+
+    shuffled_minibatches = tree_map(batch_fn, data)
+    return shuffled_minibatches
+
+
+def integrate(params: Dict, data: Dict, dynamics: Callable):
+    """Computes an integration forward pass.
+
+    Parameters
+    ----------
+    dynamics : ODE function with signature (state, time, params, control)
+
+    Returns
+    -------
+    predictions : tuple (x, v) of position and velocity jnp.ndarrays
+    """
+    inputs = (data["x"][0], data["v"][0])
+    times = data["t"]
+    control = data["u"] if "u" in data else None
+    predictions = odeint(dynamics, inputs, times, params, control)
+    return predictions

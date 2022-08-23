@@ -23,9 +23,10 @@ def get_rayleigh_params(params, rng):
 class CuckerSmale:
     """Cucker-Smale dynamics."""
 
-    def __init__(self, seed=0, rayleigh=False):
+    def __init__(self, seed=0, rayleigh=False, r0=jnp.inf):
         self.seed = seed
         self.rayleigh = rayleigh
+        self.r0 = r0
         self.rng = jax.random.PRNGKey(self.seed)
         K_rng, beta_rng = jax.random.split(self.rng, 2)
         self.params = {
@@ -41,18 +42,21 @@ class CuckerSmale:
     def f(self, state, time, params, control):
         x, v = state
         r = pdist(x, x)
+        a = jnp.where(r < self.r0, self.phi(r, params), 0)[..., None]
+        N = jnp.count_nonzero(a, axis=1)
         F = rayleigh_friction(v, params) if self.rayleigh else 0.0
-        dvdt = F + jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=1)
         dxdt = v
+        dvdt = F + (1 / N) * jnp.sum(a * -pdisp(v, v), axis=1)
         return dxdt, dvdt
 
 
 class CuckerSmalePoly:
     """Cucker-Smale dynamics with polynomial approximation of phi."""
 
-    def __init__(self, seed=0, rayleigh=False, chebyshev=False, n=20):
+    def __init__(self, seed=0, rayleigh=False, chebyshev=False, n=20, r0=jnp.inf):
         self.seed = seed
         self.rayleigh = rayleigh
+        self.r0 = r0
         self.chebyshev = chebyshev
         self.evaluate_poly = chebval if self.chebyshev else jnp.polyval
         self.rng = jax.random.PRNGKey(self.seed)
@@ -68,9 +72,11 @@ class CuckerSmalePoly:
     def f(self, state, time, params, control):
         x, v = state
         r = pdist(x, x)
+        a = jnp.where(r < self.r0, self.phi(r, params), 0)[..., None]
+        N = jnp.count_nonzero(a, axis=1)
         F = rayleigh_friction(v, params) if self.rayleigh else 0.0
-        dvdt = F + jnp.mean(self.phi(r, params)[..., None] * -pdisp(v, v), axis=1)
         dxdt = v
+        dvdt = F + (1 / N) * jnp.sum(a * -pdisp(v, v), axis=1)
         return dxdt, dvdt
 
 
@@ -84,46 +90,41 @@ class CuckerSmaleNN:
         hidden_layer_sizes=[8],
         activation="elu",
         dropout_rate=0.0,
+        r0=jnp.inf,
     ):
         self.seed = seed
         self.rayleigh = rayleigh
         self.hidden_layer_sizes = hidden_layer_sizes
         self.activation = activation
         self.dropout_rate = dropout_rate
+        self.r0 = r0
         self.rng = jax.random.PRNGKey(self.seed)
-        _train_mlp = lambda r: hk.nets.MLP(
-            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, self.activation)
-        )(r, self.dropout_rate, self.rng)
-        _mlp = lambda r: hk.nets.MLP(
-            self.hidden_layer_sizes + [1], activation=getattr(jax.nn, self.activation)
-        )(
-            r
-        )  # no dropout
-        self.train_mlp = hk.transform(_train_mlp)
-        self.mlp = hk.transform(_mlp)
+
+        def network_fn(r):
+            nn = hk.nets.MLP(
+                self.hidden_layer_sizes + [1],
+                activation=getattr(jax.nn, self.activation),
+            )
+            return nn(r)
+
+        self.mlp = hk.transform(network_fn)
         self.params = {"nn": self.mlp.init(self.rng, jnp.array([0.0]))}
         if self.rayleigh:
             get_rayleigh_params(self.params, self.rng)
 
-    def phi(self, r, params, train=False):
-        if train:
-            out = self.train_mlp.apply(params["nn"], self.rng, r.reshape(-1, 1))
-        else:
-            out = self.mlp.apply(params["nn"], self.rng, r.reshape(-1, 1))
+    def phi(self, r, params):
+        out = self.mlp.apply(params["nn"], self.rng, r.reshape(-1, 1))
         return out.reshape(r.shape)
 
-    def _f(self, state, time, params, control, train):
+    def f(self, state, time, params, control):
         x, v = state
         r = pdist(x, x)
+        a = jnp.where(r < self.r0, self.phi(r, params), 0)[..., None]
+        N = jnp.count_nonzero(a, axis=1)
         F = rayleigh_friction(v, params) if self.rayleigh else 0.0
-        dvdt = F + jnp.mean(
-            self.phi(r, params, train)[..., None] * -pdisp(v, v), axis=1
-        )
         dxdt = v
+        dvdt = F + (1 / N) * jnp.sum(a * -pdisp(v, v), axis=1)
         return dxdt, dvdt
-
-    f = partialmethod(_f, train=False)
-    f_training = partialmethod(_f, train=True)
 
 
 class CuckerSmaleKNN:

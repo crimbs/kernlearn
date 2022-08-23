@@ -33,7 +33,8 @@ def generate_data(model, seed=0, nsteps=95, N=50, d=2, ss=0):
     params = model.params
     dynamics = jit(model.f)
     t = jnp.arange(nsteps + ss, dtype=jnp.float64)
-    x, v = odeint(dynamics, initial_state, t, params)
+    control = None
+    x, v = odeint(dynamics, initial_state, t, params, control)
     x_out = min_max_scaler(x[ss:])
     v_out = min_max_scaler(v[ss:])
     t_out = t[ss:]

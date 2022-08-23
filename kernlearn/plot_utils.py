@@ -17,11 +17,11 @@ plt.rcParams.update(
         "font.serif": ["Computer Modern Roman"],
         "axes.titlesize": 10,
         "font.size": 10,
-        "legend.fontsize": 7,
+        "legend.fontsize": 9,
         "savefig.dpi": 300,  # The resolution in dots per inch
         "savefig.bbox": "tight",  # Bounding box in inches
         "animation.writer": "pillow",
-        "image.cmap": "viridis",
+        "image.cmap": "plasma",
     }
 )
 
@@ -46,40 +46,11 @@ def loss_plot(
     epochs = list(range(len(train_loss)))
     ax.semilogy(epochs, train_loss, color=color, label=train_label)
     if test_loss is not None:
-        ax.semilogy(
-            epochs, test_loss, color=color, linestyle="dashed", label=test_label
-        )
+        ax.semilogy(epochs, test_loss, color=color, label=test_label, alpha=0.5)
     ax.xaxis.get_major_locator().set_params(integer=True)
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Loss")
     ax.legend(frameon=False)
-
-
-def loss_comparison_plot(ax, loss_dict, color_list=["r", "g", "b"], linestyle="solid"):
-    for i, key in enumerate(loss_dict):
-        loss, error = loss_dict[key]
-        epochs = list(range(len(loss)))
-        if error is not None:
-            ax.semilogy(
-                epochs, loss, color=color_list[i], linestyle=linestyle, label=key
-            )
-            ax.fill_between(
-                epochs,
-                loss - error,
-                loss + error,
-                color=color_list[i],
-                linewidth=0,
-                alpha=0.2,
-            )
-        else:
-            ax.semilogy(
-                epochs, loss, color=color_list[i], linestyle=linestyle, label=key
-            )
-    ax.set_xlim((epochs[0], epochs[-1]))
-    ax.xaxis.get_major_locator().set_params(integer=True)
-    ax.set_xlabel("Epochs")
-    ax.set_ylabel("Loss")
-    # ax.legend(frameon=False)
 
 
 def trajectory_plot(ax, x, v, color="black", alpha=1, linewidth=0.75, arrows=True):
@@ -104,56 +75,6 @@ def trajectory_plot(ax, x, v, color="black", alpha=1, linewidth=0.75, arrows=Tru
             pivot="mid",
             color=color,
         )
-
-
-def trajectory_comparison_plot(
-    path, x0, v0, x1, v1, fname="trajectory_comparison.pdf", alpha=1
-):
-    x0 = np.asarray(x0)
-    x1 = np.asarray(x1)
-    v0 = np.asarray(v0)
-    v1 = np.asarray(v1)
-    vn0 = v0 / np.linalg.norm(v0, axis=-1)[..., None]  # Normalize
-    vn1 = v1 / np.linalg.norm(v1, axis=-1)[..., None]  # Normalize
-    fig, ax = plt.subplots(ncols=2)
-    ax[0].set_aspect("equal", adjustable="box")
-    ax[0].set(xlim=[0, 1], ylim=[0, 1])
-    ax[0].plot(x0[..., 0], x0[..., 1], "-k", linewidth=1, alpha=alpha)
-    ax[0].quiver(
-        x0[-1, :, 0],
-        x0[-1, :, 1],
-        vn0[-1, :, 0],
-        vn0[-1, :, 1],
-        angles="xy",
-        scale_units="xy",
-        scale=30,
-        headaxislength=5,
-        pivot="mid",
-    )
-    # ax[0].set_xlabel(r"$x$")
-    # ax[0].set_ylabel(r"$y$")
-    ax[0].set_xticks([])
-    ax[0].set_yticks([])
-    ax[1].set_aspect("equal", adjustable="box")
-    ax[1].set(xlim=[0, 1], ylim=[0, 1])
-    ax[1].plot(x1[..., 0], x1[..., 1], "-k", linewidth=1, alpha=alpha)
-    ax[1].quiver(
-        x1[-1, :, 0],
-        x1[-1, :, 1],
-        vn1[-1, :, 0],
-        vn1[-1, :, 1],
-        angles="xy",
-        scale_units="xy",
-        scale=30,
-        headaxislength=5,
-        pivot="mid",
-    )
-    # ax[1].set_xlabel(r"$x$")
-    # ax[1].set_ylabel(r"$y$")
-    ax[1].set_xticks([])
-    ax[1].set_yticks([])
-    fig.tight_layout()
-    fig.savefig(os.path.join(path, fname))
 
 
 def predator_prey_plot(ax, x_prey, v_prey, x_pred, v_pred, color="black", alpha=1.0):
@@ -195,8 +116,8 @@ def predator_prey_plot(ax, x_prey, v_prey, x_pred, v_pred, color="black", alpha=
     )
 
 
-def phi_plot(ax, r, phi, error=0, color="black"):
-    ax.plot(r, phi, color=color)
+def phi_plot(ax, r, phi, error=0, color="black", label=None):
+    ax.plot(r, phi, color=color, label=label)
     ax.fill_between(
         r,
         phi - error,
