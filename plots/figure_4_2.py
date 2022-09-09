@@ -12,7 +12,7 @@ from tqdm import tqdm
 from kernlearn import plot_utils
 
 SEED = 0
-PATH = os.path.join("figures", "other")
+PATH = os.path.join("plots")
 
 
 @jit

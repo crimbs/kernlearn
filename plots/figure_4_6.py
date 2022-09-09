@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from kernlearn.utils import pdist, data_loader, train_test_split
 from kernlearn.plot_utils import kde_plot
 
-PATH = os.path.join("figures", "fish", "dist_hist")
+PATH = os.path.join("plots")
 
 
 def get_r(x, b):

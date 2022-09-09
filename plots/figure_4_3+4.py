@@ -7,14 +7,12 @@ from kernlearn.utils import data_loader, train_test_split, save_hyperparameters
 from kernlearn.plot_utils import *
 from kernlearn.models import *
 from kernlearn.learn import Optimisation
-from kernlearn.generate_data import generate_data
 
 SEED = 13
-PATH = os.path.join("figures", "fish", "model_selection")
+PATH = os.path.join("plots")
 
 
 def main():
-    # data = generate_data(CuckerSmale(seed=SEED, rayleigh=True), SEED+1)
     data = data_loader("data/fish/json/processed_data.json")
     train_data, test_data = train_test_split(data, ind=28)
     opt = Optimisation(
@@ -64,8 +62,8 @@ def main():
     testtrajfig, testtrajax = plt.subplots(nrows=3, ncols=3, figsize=(5.6, 5.6))
     trajectory_plot(traintrajax[0, 0], train_data["x"], train_data["v"], color="black")
     trajectory_plot(testtrajax[0, 0], test_data["x"], test_data["v"], color="black")
-    traintrajax[0, 0].set_title("Ground Truth")
-    testtrajax[0, 0].set_title("Ground Truth")
+    traintrajax[0, 0].set_title("Observations")
+    testtrajax[0, 0].set_title("Observations")
     r = jnp.linspace(0, 1, num=300)
 
     for i, key in enumerate(models):

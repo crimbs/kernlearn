@@ -13,7 +13,7 @@ from kernlearn.learn import Optimisation
 
 
 SEED = 0
-PATH = os.path.join("figures", "fish", "bayesian")
+PATH = os.path.join("plots")
 
 
 def mvn(model):
